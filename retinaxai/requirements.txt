@@ -1,10 +1,30 @@
+# Core deep learning stack
 torch>=2.0.0
 torchvision>=0.15.0
-grad-cam>=1.4.8
+
+# Segmentation architectures (U-Net++, DeepLabV3+) with pretrained encoders.
+# Pinned because the smp.losses / smp.metrics API is stable at this version.
+segmentation-models-pytorch==0.3.3
+
+# Synchronised image + mask augmentation for segmentation.
+albumentations==1.4.0
+
+# Explainability (Track B): Grad-CAM, Grad-CAM++, Layer-CAM, HiRes-CAM, Eigen-CAM.
+grad-cam==1.5.0
+
+# Image processing and classical baseline (CLAHE, morphology, retina crop).
+opencv-python-headless>=4.8.0
 scikit-image>=0.21.0
-pandas>=2.0.0
+scipy>=1.11.0
+
+# Data handling, metrics tables, plotting.
 numpy>=1.24.0
+pandas>=2.0.0
 matplotlib>=3.7.0
 Pillow>=10.0.0
-scipy>=1.11.0
+
+# Progress bars for the training / evaluation loops.
+tqdm>=4.66.0
+
+# Only needed if you (re)download the datasets from Kaggle.
 kaggle>=1.5.12
