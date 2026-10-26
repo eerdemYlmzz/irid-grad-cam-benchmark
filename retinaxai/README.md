@@ -200,21 +200,87 @@ All hyperparameters live in the `CFG` class in the notebook. The most useful one
 
 ---
 
-## 8. Reference results from the literature
+## 8. Results
 
-These are the numbers reported by other work on IDRiD; they are the target range for
-Track A once trained. They are not this project's results (training is run separately).
+Measured on the official IDRiD test split - 27 images, `IDRiD_55` to `IDRiD_81`, never
+seen during training or model selection. Both tracks are scored on the same images and
+against the same combined lesion mask, but note the aggregation differs: Track A pools
+every pixel in the split before computing the score (dataset-level), while Track B
+averages each image's own score (per-image mean). See the caveats below.
+
+### Track A - supervised segmentation
+
+U-Net++ with an EfficientNet-B4 encoder at 512x512. Best checkpoint came from epoch 25;
+the probability threshold was swept and 0.85 maximised mean Dice.
+
+| Lesion | IoU | Dice |
+| --- | --- | --- |
+| Microaneurysms | 0.011 | 0.021 |
+| Haemorrhages | 0.220 | 0.361 |
+| Hard exudates | 0.501 | 0.668 |
+| Soft exudates | 0.089 | 0.164 |
+| **Combined** | **0.306** | **0.468** |
+
+Hard exudates are the one channel the model genuinely learned. Microaneurysms and soft
+exudates are weak, and the dominant cause is resolution rather than training: IDRiD
+images are 4288x2848 and are resized to 512, which leaves a 10-30 px microaneurysm at
+1-4 px. Soft exudates additionally have the fewest masks (40 of 81 images).
+
+### Track B - weakly-supervised CAM explainability
+
+An EfficientNet-B0 severity classifier trained on APTOS image-level grades, probed at
+the mid-level layer `features[5]` rather than the final block, with per-image Otsu
+thresholding on each heatmap.
+
+| Method | IoU | Dice | Share of supervised Dice |
+| --- | --- | --- | --- |
+| U-Net++ (supervised reference) | 0.306 | 0.468 | 100% |
+| LayerCAM | 0.055 | 0.102 | 22% |
+| HiResCAM | 0.054 | 0.102 | 22% |
+| GradCAM++ | 0.031 | 0.058 | 12% |
+| GradCAM | 0.019 | 0.036 | 8% |
+| EigenCAM | 0.012 | 0.023 | 5% |
+
+Three findings:
+
+1. **Image-level supervision does not substitute for pixel-level supervision.** The best
+   CAM reaches roughly a fifth of the supervised score, and the protocol is deliberately
+   generous to CAM - adaptive per-image Otsu thresholds and a mid-level target layer.
+2. **The most-cited method is not the most faithful.** GradCAM ranks fourth of five.
+   LayerCAM and HiResCAM, both designed to preserve spatial detail, roughly treble it.
+   Citing Grad-CAM as evidence of lesion-level attention is not supported here.
+3. **EigenCAM behaves as the control it is.** Being class-agnostic, it scores lowest,
+   which is what a method that ignores the predicted class should do.
+
+### Caveats
+
+- **The two tracks aggregate differently.** Track A is dataset-level, Track B is a mean
+  of per-image scores. They are not strictly interchangeable, so the exact ratios in the
+  table are indicative rather than exact. Reporting both aggregations for both tracks is
+  the obvious next cleanup.
+- **Single training run, one seed, 27 test images.** Absolute values would move under a
+  different split, and the per-lesion numbers more than the combined one.
+- The ordering - supervised far above every CAM, and GradCAM below the spatially
+  faithful variants - is the part that survives these caveats.
+
+---
+
+## 9. Reference results from the literature
+
+These are numbers reported by other work on IDRiD. They are **not** directly comparable
+to section 8: they generally train on patches at native resolution and average Dice
+per image, whereas the results above resize to 512 and aggregate dataset-level.
 
 - Dedicated attention U-Net for microaneurysms: Dice ~0.865, IoU ~0.758.
 - U-Net variants for haemorrhages and hard exudates: Dice ~0.90-0.95.
 - Grad-CAM lesion localisation (weakly supervised): area-under-PR ~0.18, far below the
-  supervised segmenters, which is consistent with the low overlap Track B measures.
+  supervised segmenters, which matches the gap Track B measures.
 
 See `docs/TECHNICAL_SUMMARY.md` for the full literature review and citations.
 
 ---
 
-## 9. Notes and limitations
+## 10. Notes and limitations
 
 - IDRiD's segmentation subset is small (81 images). Transfer learning, heavy
   augmentation and strong regularisation mitigate this, but absolute numbers depend on
@@ -223,3 +289,7 @@ See `docs/TECHNICAL_SUMMARY.md` for the full literature review and citations.
   to trail the others.
 - Track B is an interpretability study, not a segmentation method. Its low overlap is the
   expected and intended finding, not a defect.
+- The clearest route to better microaneurysm and soft-exudate scores is patch-based
+  training at native resolution with sliding-window inference, which removes the
+  downsampling that currently destroys the smallest lesions. Per-lesion thresholds
+  instead of one global cut are a cheaper intermediate step.
